@@ -1,32 +1,17 @@
-// controllers/controladorAnioLectivo.js 
+// controllers/controladorAnioLectivo.js
 const mongoose = require('mongoose');
 const AnioLectivo = require('../models/AnioLectivo');
 const ErrorResponse = require('../utils/errorResponse');
+const Calificacion = require('../models/Calificacion'); // ⬅ NUEVO: para calcular nota final
 
-/**
- * Estructura esperada del modelo (referencial):
- * {
- *   nombre: String (único, requerido),
- *   fechaInicio: Date (requerido),
- *   fechaFin: Date (requerido),
- *   actual: Boolean (default: false),
- *   activo: Boolean (default: true),
- *   orden:  Number (opcional, usado para secuencia de años)
- * }
- */
 
-// ===================== LISTAR =====================
 exports.listar = async (req, res, next) => {
   try {
     // Si tu modelo tiene "activo", mostramos solo activos; si no, mostramos todo.
     const filter = {};
     if (AnioLectivo.schema.path('activo')) filter.activo = true;
 
-    // 👇 Ordenamos por "orden" ascendente y luego por fechaInicio
-    const rows = await AnioLectivo.find(filter)
-      .sort({ orden: 1, fechaInicio: 1 })
-      .lean();
-
+    const rows = await AnioLectivo.find(filter).sort({ createdAt: -1 }).lean();
     res.json({ ok: true, data: rows });
   } catch (err) {
     next(err);
@@ -67,24 +52,12 @@ exports.obtenerActual = async (req, res, next) => {
 // ===================== CREAR =====================
 exports.crear = async (req, res, next) => {
   try {
-    const { nombre, fechaInicio, fechaFin, actual, activo, orden } = req.body || {};
-
     const payload = {
-      nombre,
-      fechaInicio,
-      fechaFin,
-      actual: !!actual,
+      nombre: req.body?.nombre,
+      fechaInicio: req.body?.fechaInicio,
+      fechaFin: req.body?.fechaFin,
+      actual: !!req.body?.actual,
     };
-
-    // activo: si viene en el body lo usamos; si no, por defecto true
-    if (AnioLectivo.schema.path('activo')) {
-      payload.activo = (typeof activo === 'boolean') ? activo : true;
-    }
-
-    // 🔹 orden: si viene, lo convertimos a número; si no, lo dejamos undefined
-    if (orden !== undefined && orden !== null && orden !== '') {
-      payload.orden = Number(orden) || 0;
-    }
 
     // Validaciones básicas
     if (!payload.nombre) return next(new ErrorResponse('El nombre es obligatorio', 400));
@@ -115,23 +88,11 @@ exports.actualizar = async (req, res, next) => {
       return next(new ErrorResponse('ID inválido', 400));
     }
 
-    const { nombre, fechaInicio, fechaFin, activo, orden } = req.body || {};
-
     const body = {
-      nombre,
-      fechaInicio,
-      fechaFin,
+      nombre: req.body?.nombre,
+      fechaInicio: req.body?.fechaInicio,
+      fechaFin: req.body?.fechaFin,
     };
-
-    // activo (si tu schema lo tiene)
-    if (AnioLectivo.schema.path('activo') && typeof activo === 'boolean') {
-      body.activo = activo;
-    }
-
-    // 🔹 orden (si viene del front)
-    if (orden !== undefined && orden !== null && orden !== '') {
-      body.orden = Number(orden) || 0;
-    }
 
     // Limpia undefineds
     Object.keys(body).forEach((k) => body[k] === undefined && delete body[k]);
@@ -211,6 +172,69 @@ exports.eliminar = async (req, res, next) => {
       await AnioLectivo.deleteOne({ _id: id });
       return res.json({ ok: true, data: { _id: id } });
     }
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ===================== NOTA FINAL DEL ESTUDIANTE (NUEVO) =====================
+// GET /api/aniolectivo/:anioId/curso/:cursoId/estudiante/:estId/nota-final
+// Calcula la nota final del estudiante en ese año lectivo y curso
+exports.obtenerNotaFinalEstudiante = async (req, res, next) => {
+  try {
+    const { anioId, cursoId } = req.params;
+    const estudianteId = req.params.estId || req.params.estudianteId; // soporta ambos nombres
+
+    // Validar IDs
+    if (!mongoose.Types.ObjectId.isValid(anioId)) {
+      return next(new ErrorResponse('anioId inválido', 400));
+    }
+    if (!mongoose.Types.ObjectId.isValid(cursoId)) {
+      return next(new ErrorResponse('cursoId inválido', 400));
+    }
+    if (!mongoose.Types.ObjectId.isValid(estudianteId)) {
+      return next(new ErrorResponse('estudianteId inválido', 400));
+    }
+
+    // Buscar todas las calificaciones del estudiante en ese año y curso
+    const calificaciones = await Calificacion.find({
+      anioLectivoId: anioId,
+      cursoId: cursoId,
+      estudianteId: estudianteId,
+    }).lean();
+
+    if (!calificaciones || calificaciones.length === 0) {
+      return next(new ErrorResponse('No hay calificaciones registradas para ese estudiante', 404));
+    }
+
+    // Inicializar resumen por trimestre
+    const trimestres = { T1: null, T2: null, T3: null };
+    let suma = 0;
+    let conteo = 0;
+
+    for (const c of calificaciones) {
+      // Asumimos que el campo trimestre es algo como 'T1', 'T2', 'T3'
+      if (c.trimestre && trimestres.hasOwnProperty(c.trimestre)) {
+        trimestres[c.trimestre] = c.promedioTrimestral;
+      }
+      if (c.promedioTrimestral != null) {
+        suma += c.promedioTrimestral;
+        conteo++;
+      }
+    }
+
+    const notaFinal = conteo > 0 ? Number((suma / conteo).toFixed(2)) : null;
+
+    return res.json({
+      ok: true,
+      data: {
+        anioLectivoId: anioId,
+        cursoId,
+        estudianteId,
+        notaFinal,
+        detalle: trimestres,
+      },
+    });
   } catch (err) {
     next(err);
   }

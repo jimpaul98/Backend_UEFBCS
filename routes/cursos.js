@@ -1,47 +1,64 @@
-// routes/curso.js
+// routes/cursos.js
 const express = require('express');
 const router = express.Router();
 
+const {
+  getAllCursos,
+  getOneById,
+  createCurso,
+  updateCurso,
+  deleteCurso,
+  limpiarEstudiantesCurso,  
+} = require('../controllers/controladorCurso');
+
 const { authMiddleware, checkRole } = require('../middleware/authMiddleware');
-const cursoController = require('../controllers/controladorCurso');
 
-// =============================================
-// 🔹 RUTAS PÚBLICAS O SEMI-PÚBLICAS
-// =============================================
+// Listar cursos
+router.get(
+  '/',
+  authMiddleware,
+  checkRole(['admin', 'profesor']),
+  getAllCursos
+);
 
-// Listar todos los cursos (Admin o Profesor pueden verlos)
-router.get('/', authMiddleware, checkRole(['admin', 'profesor']), cursoController.getAllCursos);
+// Obtener curso por ID
+router.get(
+  '/:id',
+  authMiddleware,
+  checkRole(['admin', 'profesor']),
+  getOneById
+);
 
-// Obtener un curso por ID (con populate completo)
-router.get('/:id', authMiddleware, checkRole(['admin', 'profesor']), cursoController.getOneById);
-
-// =============================================
-// 🔹 RUTAS PROTEGIDAS PARA ADMIN / PROFESOR
-// =============================================
-
-// Crear curso (solo Admin)
+// Crear curso
 router.post(
   '/',
   authMiddleware,
   checkRole(['admin']),
-  cursoController.createCurso
+  createCurso
 );
 
-// Actualizar curso (solo Admin)
+// Actualizar curso
 router.put(
   '/:id',
   authMiddleware,
   checkRole(['admin']),
-  cursoController.updateCurso
+  updateCurso
 );
 
-// Eliminar curso (solo Admin)
+// Eliminar curso
 router.delete(
   '/:id',
   authMiddleware,
   checkRole(['admin']),
-  cursoController.deleteCurso
+  deleteCurso
+);
+
+// ✅ NUEVA RUTA: limpiar estudiantes del curso (para nuevo año lectivo)
+router.put(
+  '/:id/limpiar-estudiantes',
+  authMiddleware,
+  checkRole(['admin']),
+  limpiarEstudiantesCurso
 );
 
 module.exports = router;
-

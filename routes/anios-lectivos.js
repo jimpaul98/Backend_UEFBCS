@@ -9,6 +9,15 @@ router.get('/', authMiddleware, checkRole(['admin']), ctrl.listar);
 router.get('/actual', authMiddleware, checkRole(['admin', 'profesor']), ctrl.obtenerActual);
 router.get('/:id', authMiddleware, checkRole(['admin']), ctrl.obtenerUno);
 
+// 👇 RUTA AÑADIDA
+router.get(
+  '/:anioId/curso/:cursoId/estudiante/:estId/nota-final',
+  authMiddleware,
+  checkRole(['admin', 'profesor']),
+  ctrl.obtenerNotaFinalEstudiante
+);
+// 👆 RUTA AÑADIDA
+
 // ===================== Crear / Actualizar =====================
 router.post('/', authMiddleware, checkRole(['admin']), ctrl.crear);
 router.put('/:id', authMiddleware, checkRole(['admin']), ctrl.actualizar);
