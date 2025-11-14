@@ -1,21 +1,20 @@
-const { response } = require('express');
+// middleware/validar-campos.js
+
 const { validationResult } = require('express-validator');
 
-const validarCampos = (req, res = response, next) => {
-    
-    // Captura los errores de validación de express-validator
-    const errores = validationResult(req); 
+const validarCampos = (req, res, next) => {
+  const errores = validationResult(req);
 
-    if (!errores.isEmpty()) {
-        return res.status(400).json({
-            ok: false,
-            errors: errores.mapped()
-        });
-    }
+  if (!errores.isEmpty()) {
+    return res.status(400).json({
+      ok: false,
+      errores: errores.mapped(),
+    });
+  }
 
-    next(); // Si no hay errores, pasa al siguiente middleware/controlador
-}
+  next();
+};
 
 module.exports = {
-    validarCampos // 🛑 Exportación necesaria
-}
+  validarCampos,
+};

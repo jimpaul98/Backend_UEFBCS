@@ -1,55 +1,73 @@
 // server.js
-require('dotenv').config(); 
-const express = require('express');
-const dotenv = require('dotenv');
-const conectarDB = require('./config/db');
-const cors = require('cors'); 
-
-// Cargar variables de entorno
-dotenv.config();
-
-// Conectar a la base de datos
-conectarDB();
+process.env.DOTENV_CONFIG_SILENT = "true";
+require("dotenv/config");
+const express = require("express");
+const cors = require("cors");
+const conectarDB = require("./config/db");
+const errorHandler = require("./middleware/error");
 
 const app = express();
 
-// --- CONFIGURACIÓN DE CORS ---
+// =======================
+//  CORS CONFIG
+// =======================
+const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || "http://localhost:4200";
+
 const corsOptions = {
-    // ⬅️ 2. El origen de tu frontend Angular
-    origin: 'http://localhost:4200', 
-    // Métodos necesarios para peticiones de CRUD y preflight (OPTIONS)
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], 
-    // Cabeceras que el frontend enviará (necesario para el token JWT)
-    allowedHeaders: ['Content-Type', 'Authorization'], 
-    // Permite que el navegador envíe cookies y headers de autorización
-    credentials: true 
+  origin: FRONTEND_ORIGIN,
+  methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+  credentials: true,
 };
 
-app.use(cors(corsOptions)); // ⬅️ 3. Usar el middleware CORS
+app.use(cors(corsOptions));
 
-// Middleware para parsear datos (Debe ir después del CORS)
+// =======================
+//  MIDDLEWARES
+// =======================
 app.use(express.json());
 
-// Uso de Rutas de CRUD y Autenticación
-app.use('/api/autenticacion', require('./routes/autenticacion'));
-app.use('/api/usuarios', require('./routes/usuarios'));
-app.use('/api/estudiantes', require('./routes/estudiantes'));
-app.use('/api/cursos', require('./routes/cursos'));
-app.use('/api/calificaciones', require('./routes/calificaciones'));
-app.use('/api/asistencias', require('./routes/asistencias')); 
-app.use('/api/materias', require('./routes/materia')); 
-app.use('/api/aniolectivo', require('./routes/anios-lectivos'));
+// =======================
+//  RUTAS
+// =======================
+app.use("/api/autenticacion", require("./routes/autenticacion"));
+app.use("/api/usuarios", require("./routes/usuarios"));
+app.use("/api/estudiantes", require("./routes/estudiantes"));
+app.use("/api/cursos", require("./routes/cursos"));
+app.use("/api/calificaciones", require("./routes/calificaciones"));
+app.use("/api/asistencias", require("./routes/asistencias"));
+app.use("/api/materias", require("./routes/materia"));
+app.use("/api/aniolectivo", require("./routes/anios-lectivos"));
 app.use("/api/profesor", require("./routes/profesor"));
-app.use('/api/reportes', require('./routes/reportes'));
+app.use("/api/reportes", require("./routes/reportes"));
 
+// =======================
+//  ROOT / HEALTHCHECK
+// =======================
+app.get("/", (req, res) =>
+  res.send("API de Gestión de Calificaciones en funcionamiento!")
+);
 
-const errorHandler = require('./middleware/error');
+// =======================
+//  MANEJO GLOBAL DE ERRORES
+// =======================
 app.use(errorHandler);
 
-
-
-app.get('/', (req, res) => res.send('API de Gestión de Calificaciones en funcionamiento!'));
-
+// =======================
+//  ARRANQUE DEL SERVIDOR
+// =======================
 const PUERTO = process.env.PUERTO || 5000;
 
-app.listen(PUERTO, () => console.log(`Servidor ejecutándose en el puerto ${PUERTO} 🚀`));
+const startServer = async () => {
+  try {
+    await conectarDB();
+    app.listen(PUERTO, () => {
+      console.log(`✅ Servidor ejecutándose en el puerto ${PUERTO}`);
+    });
+  } catch (err) {
+    console.error("❌ Error iniciando servidor:", err.message);
+    process.exit(1);
+  }
+};
+
+startServer();

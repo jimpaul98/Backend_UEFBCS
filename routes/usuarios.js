@@ -1,12 +1,10 @@
-// archivo: router/usuarioRoutes.js
+// routes/usuarios.js
 
-const express = require("express");
+const express = require('express');
 const router = express.Router();
-// Asumo que tienes un middleware para validar campos.
-const { validarCampos } = require("../middleware/validar-campos");
 
-// 🛑 CORRECCIÓN: Usaremos 'authMiddleware' para proteger la ruta '/me'
-const { authMiddleware, checkRole } = require("../middleware/authMiddleware");
+const { validarCampos } = require('../middleware/validar-campos');
+const { authMiddleware, checkRole } = require('../middleware/authMiddleware');
 
 const {
   getUsuarios,
@@ -15,50 +13,53 @@ const {
   crearUsuario,
   actualizarUsuario,
   eliminarUsuario,
-  getPerfil, // 🛑 AÑADIDO: Importar la función getPerfil
-} = require("../controllers/controladorUsuario");
+  getPerfil,
+  importUsuariosExcel,
+} = require('../controllers/controladorUsuario');
 
 // ---------------------------------------------------
-// 🛑 RUTA CRÍTICA PARA EL LOGIN DEL FRONTEND 🛑
-// @route   GET /api/usuarios/me
-// @access  Protegido (Usuario Logueado)
+// PERFIL DEL USUARIO LOGUEADO
+// GET /api/usuarios/me
 // ---------------------------------------------------
-router.get(
-  "/me",
-  [authMiddleware], // 🛑 CORRECCIÓN: Usamos authMiddleware para validar el JWT
-  getPerfil
-);
+router.get('/me', [authMiddleware], getPerfil);
 
 // ---------------------------------------------------
-// Rutas de CRUD
-// ---------------------------------------------------
-
+// PROFESORES
 // /api/usuarios/profesores
+// ---------------------------------------------------
 router.get(
-  "/profesores",
-  [authMiddleware, checkRole(["admin", "profesor"]), validarCampos], 
+  '/profesores',
+  [authMiddleware, checkRole(['admin', 'profesor']), validarCampos],
   getUsuariosPorRolProfesor
 );
 
-// /api/usuarios (Rutas generales de listado y creación)
+// ---------------------------------------------------
+// CRUD GENERAL
+// /api/usuarios
+// ---------------------------------------------------
 router
-  .route("/")
-  .get(authMiddleware, checkRole(["admin", "profesor"]), getUsuarios)  
-  .post(authMiddleware, checkRole(["admin"]), crearUsuario); 
-  
+  .route('/')
+  .get(authMiddleware, checkRole(['admin', 'profesor']), getUsuarios)
+  .post(authMiddleware, checkRole(['admin']), crearUsuario);
 
-// /api/usuarios/:id (Rutas específicas por ID)
 router
-  .route("/:id")
-  .get(authMiddleware, checkRole(["admin"]), getUsuario) // R: Leer Uno
-  .put(authMiddleware, checkRole(["admin"]), actualizarUsuario) // U: Actualizar
-  .delete(authMiddleware, checkRole(["admin"]), eliminarUsuario); // D: Eliminar
+  .route('/:id')
+  .get(authMiddleware, checkRole(['admin']), getUsuario)
+  .put(authMiddleware, checkRole(['admin']), actualizarUsuario)
+  .delete(authMiddleware, checkRole(['admin']), eliminarUsuario);
 
-
+// ---------------------------------------------------
+// IMPORTAR USUARIOS DESDE EXCEL
+// Protegido solo para admin
+// ---------------------------------------------------
 const upload = require('../middleware/uploadExcel');
-const { importUsuariosExcel } = require('../controllers/controladorUsuario');
 
-
-router.post('/import-excel', upload.single('file'), importUsuariosExcel);
+router.post(
+  '/import-excel',
+  authMiddleware,
+  checkRole(['admin']),
+  upload.single('file'),
+  importUsuariosExcel
+);
 
 module.exports = router;
