@@ -9,6 +9,15 @@ const errorHandler = require("./middleware/error");
 const app = express();
 
 // =======================
+//  SECURITY & PERFORMANCE
+// =======================
+const compression = require("compression");
+const helmet = require("helmet");
+
+app.use(compression());
+app.use(helmet());
+
+// =======================
 //  CORS CONFIG
 // =======================
 const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || "http://localhost:4200";

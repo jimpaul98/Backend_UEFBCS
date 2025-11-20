@@ -28,7 +28,7 @@ const obtenerEstudiantes = async (req = request, res = response) => {
       filtro = { $or: [{ nombre: rx }, { cedula: rx }, { email: rx }] };
     }
 
-    let cursor = Estudiante.find(filtro).sort({ _id: -1 }).skip(desde);
+    let cursor = Estudiante.find(filtro).lean().sort({ _id: -1 }).skip(desde);
     if (limite > 0) cursor = cursor.limit(limite);
 
     const [total, estudiantes] = await Promise.all([
@@ -180,10 +180,14 @@ const importarEstudiantesExcel = async (req = request, res = response) => {
     const summary = { total: rows.length, created: 0, updated: 0, skipped: 0, errors: 0 };
     const detail = [];
 
+    // 1. Preparar datos y recolectar claves para consulta masiva
+    const validRows = [];
+    const cedulasToCheck = new Set();
+    const emailsToCheck = new Set();
+
     for (let i = 0; i < rows.length; i++) {
       const raw = rows[i];
       const rowN = i + 2;
-
       const norm = {};
       for (const k of Object.keys(raw)) norm[String(k).trim().toLowerCase()] = raw[k];
 
@@ -198,25 +202,58 @@ const importarEstudiantesExcel = async (req = request, res = response) => {
         continue;
       }
 
-      // DUPLICADOS -> SALTAR
-      const byCed = await Estudiante.findOne({ cedula }).lean();
-      if (byCed) {
-        summary.skipped++;
-        detail.push({ row: rowN, status: "skipped", cedula, email, reason: "Cédula ya existe" });
-        continue;
-      }
-      const byEmail = await Estudiante.findOne({ email }).lean();
-      if (byEmail) {
-        summary.skipped++;
-        detail.push({ row: rowN, status: "skipped", cedula, email, reason: "Email ya existe" });
-        continue;
+      // Validar duplicados dentro del mismo archivo Excel
+      if (cedulasToCheck.has(cedula) || emailsToCheck.has(email)) {
+          summary.skipped++;
+          detail.push({ row: rowN, status: "skipped", cedula, email, reason: "Duplicado en el archivo" });
+          continue;
       }
 
-      if (!dryRun) {
-        await Estudiante.create({ nombre, cedula, celular, email });
-      }
-      summary.created++;
-      detail.push({ row: rowN, status: "created", cedula, email });
+      cedulasToCheck.add(cedula);
+      emailsToCheck.add(email);
+      validRows.push({ rowN, nombre, cedula, celular, email });
+    }
+
+    // 2. Consultar base de datos una sola vez para verificar duplicados
+    const existingUsers = await Estudiante.find({
+        $or: [
+            { cedula: { $in: Array.from(cedulasToCheck) } },
+            { email: { $in: Array.from(emailsToCheck) } }
+        ]
+    }).lean();
+
+    const existingCedulas = new Set(existingUsers.map(u => u.cedula));
+    const existingEmails = new Set(existingUsers.map(u => u.email));
+
+    // 3. Filtrar y preparar inserciones
+    const toInsert = [];
+
+    for (const item of validRows) {
+        if (existingCedulas.has(item.cedula)) {
+            summary.skipped++;
+            detail.push({ row: item.rowN, status: "skipped", cedula: item.cedula, email: item.email, reason: "Cédula ya existe en BD" });
+            continue;
+        }
+        if (existingEmails.has(item.email)) {
+            summary.skipped++;
+            detail.push({ row: item.rowN, status: "skipped", cedula: item.cedula, email: item.email, reason: "Email ya existe en BD" });
+            continue;
+        }
+
+        toInsert.push({
+            nombre: item.nombre,
+            cedula: item.cedula,
+            celular: item.celular,
+            email: item.email
+        });
+        
+        summary.created++;
+        detail.push({ row: item.rowN, status: "created", cedula: item.cedula, email: item.email });
+    }
+
+    // 4. Insertar masivamente
+    if (!dryRun && toInsert.length > 0) {
+        await Estudiante.insertMany(toInsert);
     }
 
     res.json({ ok: true, summary, rows: detail, dryRun });
