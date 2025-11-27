@@ -1,4 +1,3 @@
-// server.js
 process.env.DOTENV_CONFIG_SILENT = "true";
 require("dotenv/config");
 const express = require("express");
@@ -18,23 +17,26 @@ app.use(compression());
 app.use(helmet());
 
 // =======================
-//  CORS CONFIG
+//  CORS CONFIG (ADAPTADO PARA RENDER)
 // =======================
 
-// Origins permitidos en desarrollo
+// Lista blanca dinámica
 const allowedOrigins = [
-  "http://192.168.0.10:4200", // <--- Poner aquí la IP de tu VPS. Ejemplo: "http://45.23.12.89:4200"
-  "http://localhost:4200"      // (Opcional) Mantenlo si quieres seguir probando desde tu PC
+  process.env.FRONTEND_URL  
 ];
 
 const corsOptions = {
   origin: function (origin, callback) {
-    // Eliminamos '!origin'. Ahora si no hay origen (Postman), se bloquea.
-    if (allowedOrigins.includes(origin)) {
+    // 1. Permitir peticiones sin origen (como Postman, Mobile Apps o cURL)
+    if (!origin) return callback(null, true);
+
+    // 2. Comprobar si el origen está en la lista blanca
+    if (allowedOrigins.indexOf(origin) !== -1 || !process.env.FRONTEND_URL) {
+      // !process.env.FRONTEND_URL permite todo si olvidaste configurar la variable (modo seguro para evitar bloqueos iniciales)
       callback(null, true);
     } else {
-      console.log("❌ Bloqueado (IP no autorizada o herramienta externa):", origin);
-      callback(new Error("Acceso denegado: Solo se permite la IP autorizada."));
+      console.log("❌ Bloqueado por CORS:", origin);
+      callback(new Error("Acceso denegado por CORS"));
     }
   },
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
@@ -79,13 +81,15 @@ app.use(errorHandler);
 // =======================
 //  ARRANQUE DEL SERVIDOR
 // =======================
-const PUERTO = process.env.PUERTO || 5000;
+// CAMBIO IMPORTANTE: Render usa la variable PORT, no PUERTO
+const PORT = process.env.PORT || 5000;
 
 const startServer = async () => {
   try {
     await conectarDB();
-    app.listen(PUERTO, "0.0.0.0", () => {
-      console.log(`✅ Servidor ejecutándose en http://0.0.0.0:${PUERTO}`);
+    // En la nube no hace falta especificar "0.0.0.0", pero no hace daño dejarlo.
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`✅ Servidor ejecutándose en puerto ${PORT}`);
     });
   } catch (err) {
     console.error("❌ Error iniciando servidor:", err.message);
